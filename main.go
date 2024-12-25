@@ -101,7 +101,7 @@ func main() {
 		Services: []Service{
 			{
 				Name:     "service1",
-				Replicas: []string{"http://localhost:8001"},
+				Replicas: []string{"http://localhost:8001", "http://localhost:8002", "http://localhost:8003"},
 			},
 		},
 	}
