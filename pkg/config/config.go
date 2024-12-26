@@ -7,16 +7,16 @@ import (
 )
 
 type Service struct {
-	Name     string
-	Replicas []string
+	Name     string   `yaml:"name"`
+	Replicas []string `yaml:"replicas"`
 }
 
 // Config is the configuration given to the load balancer
 // from a config source
 type Config struct {
-	Services []Service
+	Services []Service `yaml:"services"`
 	// strategy to be used for load balancing
-	Strategy string
+	Strategy string `yaml:"strategy"`
 }
 
 // Server is an instance of a running server

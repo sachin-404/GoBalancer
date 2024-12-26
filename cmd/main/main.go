@@ -3,15 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sachin-404/gobalancer/pkg/config"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+
+	"github.com/sachin-404/gobalancer/pkg/config"
 
 	log "github.com/sirupsen/logrus"
 )
 
 var port = flag.Int("port", 8000, "port to run the load balancer on")
+var configFile = flag.String("config", "", "config file for the load balancer")
 
 type LoadBalancer struct {
 	Config     *config.Config
@@ -56,14 +59,17 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func main() {
 	flag.Parse()
-
-	cfg := &config.Config{
-		Services: []config.Service{
-			{
-				Name:     "service1",
-				Replicas: []string{"http://localhost:8001", "http://localhost:8002", "http://localhost:8003"},
-			},
-		},
+	file, err := os.Open(*configFile)
+	defer file.Close()
+	if err != nil {
+		log.Fatalf("error opening config file: %v", err)
+	}
+	if file == nil {
+		log.Fatalf("config file not provided")
+	}
+	cfg, err := config.LoadConfig(file)
+	if err != nil {
+		log.Fatalf("error loading config: %v", err)
 	}
 
 	lb := NewLoadBalancer(cfg)
