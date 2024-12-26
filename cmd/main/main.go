@@ -13,8 +13,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var port = flag.Int("port", 8000, "port to run the load balancer on")
-var configFile = flag.String("config", "", "config file for the load balancer")
+var (
+	port       = flag.Int("port", 8000, "port to run the load balancer on")
+	configFile = flag.String("config", "", "config file for the load balancer")
+)
 
 type LoadBalancer struct {
 	Config     *config.Config
