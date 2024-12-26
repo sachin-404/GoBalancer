@@ -3,63 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/sachin-404/gobalancer/pkg/config"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
 )
 
 var port = flag.Int("port", 8000, "port to run the load balancer on")
 
-type Service struct {
-	Name     string
-	Replicas []string
-}
-
-// Config is the configuration given to the load balancer
-// from a config source
-type Config struct {
-	Services []Service
-	// strategy to be used for load balancing
-	Strategy string
-}
-
-// Server is an instance of a running server
-type Server struct {
-	url   *url.URL
-	proxy *httputil.ReverseProxy
-}
-
-type ServerList struct {
-	Servers []*Server
-
-	// current is the index of the server to be used
-	// the next server would be (current + 1) % len(Servers)
-	current uint32
-}
-
-func (sl *ServerList) Next() uint32 {
-	// normal increament (sl.current + 1) is not thread safe, can lead to race conditions
-	// atomic is crucial because multiple goroutines might be requesting the next server simultaneously
-	nxt := atomic.AddUint32(&sl.current, uint32(1))
-
-	// not using modulo (nxt % len(sl.Servers)) because it is expensive
-	lenS := uint32(len(sl.Servers))
-	// if nxt >= lenS {
-	// 	nxt -= lenS
-	// }
-	return nxt % lenS
-}
-
 type LoadBalancer struct {
-	Config     *Config
-	ServerList *ServerList
+	Config     *config.Config
+	ServerList *config.ServerList
 }
 
-func NewLoadBalancer(cfg *Config) *LoadBalancer {
-	servers := make([]*Server, 0)
+func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
+	servers := make([]*config.Server, 0)
 	for _, service := range cfg.Services {
 		// TODO: dont ignore the names
 		for _, replica := range service.Replicas {
@@ -68,17 +28,17 @@ func NewLoadBalancer(cfg *Config) *LoadBalancer {
 				log.Fatalf("error parsing url: %v", err)
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
-			servers = append(servers, &Server{
-				url:   u,
-				proxy: proxy,
+			servers = append(servers, &config.Server{
+				URL:   u,
+				Proxy: proxy,
 			})
 		}
 	}
 	return &LoadBalancer{
 		Config: cfg,
-		ServerList: &ServerList{
+		ServerList: &config.ServerList{
 			Servers: servers,
-			current: uint32(0),
+			Current: uint32(0),
 		},
 	}
 }
@@ -91,14 +51,14 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	next := l.ServerList.Next()
 	log.Infof("Forwarding request to server number %d", next)
 	// forwarding the request to the proxy
-	l.ServerList.Servers[next].proxy.ServeHTTP(res, req)
+	l.ServerList.Servers[next].Proxy.ServeHTTP(res, req)
 }
 
 func main() {
 	flag.Parse()
 
-	cfg := &Config{
-		Services: []Service{
+	cfg := &config.Config{
+		Services: []config.Service{
 			{
 				Name:     "service1",
 				Replicas: []string{"http://localhost:8001", "http://localhost:8002", "http://localhost:8003"},
