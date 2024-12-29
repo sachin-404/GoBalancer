@@ -7,7 +7,9 @@ import (
 )
 
 type Service struct {
-	Name     string   `yaml:"name"`
+	Name string `yaml:"name"`
+	// Matcher is a prefix matcher to select service based on the request path
+	Matcher  string   `yaml:"matcher"`
 	Replicas []string `yaml:"replicas"`
 }
 
@@ -26,9 +28,11 @@ type Server struct {
 }
 
 type ServerList struct {
+	// Servers are the replicas
 	Servers []*Server
-
-	// current is the index of the server to be used
+	// Name of the service
+	Name string
+	// Current is the index of the server to be used
 	// the next server would be (current + 1) % len(Servers)
 	Current uint32
 }
