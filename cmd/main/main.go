@@ -7,56 +7,84 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/sachin-404/gobalancer/pkg/config"
+	"github.com/sachin-404/gobalancer/pkg/domain"
+	"github.com/sachin-404/gobalancer/pkg/strategy"
 
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	port       = flag.Int("port", 8000, "port to run the load balancer on")
-	configFile = flag.String("config", "", "config file for the load balancer")
+	configFile = flag.String("config", "example/config.yml", "config file for the load balancer")
 )
 
 type LoadBalancer struct {
-	Config     *config.Config
-	ServerList *config.ServerList
+	// Config is the configuration loaded from the config file
+	Config *config.Config
+	// ServerList will contain mapping b/w matcher and replicas
+	ServerList map[string]*config.ServerList
 }
 
 func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
-	servers := make([]*config.Server, 0)
+	serverMap := make(map[string]*config.ServerList)
 	for _, service := range cfg.Services {
-		// TODO: dont ignore the names
+		servers := make([]*domain.Server, 0)
 		for _, replica := range service.Replicas {
 			u, err := url.Parse(replica)
 			if err != nil {
 				log.Fatalf("error parsing url: %v", err)
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
-			servers = append(servers, &config.Server{
+			servers = append(servers, &domain.Server{
 				URL:   u,
 				Proxy: proxy,
 			})
 		}
+		serverMap[service.Matcher] = &config.ServerList{
+			Servers: servers,
+			//Current: uint32(0),
+			Name:     service.Name,
+			Strategy: strategy.LoadStrategy(service.Strategy),
+		}
 	}
 	return &LoadBalancer{
-		Config: cfg,
-		ServerList: &config.ServerList{
-			Servers: servers,
-			Current: uint32(0),
-		},
+		Config:     cfg,
+		ServerList: serverMap,
 	}
 }
 
+// findServiceList looks for the first server list that matches the path (i.e. matcher)
+func (l *LoadBalancer) findServiceList(reqPath string) (*config.ServerList, error) {
+	log.Infof("Trying to find the matcher for the request %s", reqPath)
+	for matcher, s := range l.ServerList {
+		if strings.HasPrefix(reqPath, matcher) {
+			log.Infof("Found service '%s' matching the request", s.Name)
+			return s, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find a matcher for %s", reqPath)
+}
+
 func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	// TODO: we need to implement per service forwading, i.e. this method should read the request path
-	// say host:port/service1/endpoint, this should be load balanced against service named "service1"
-	// and url will be "host{i}:port{i}/endpoint"
 	log.Infof("Recieved new request %s", req.Host)
-	next := l.ServerList.Next()
-	log.Infof("Forwarding request to server number %d", next)
+	sl, err := l.findServiceList(req.URL.Path)
+	if err != nil {
+		log.Errorf(err.Error())
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	next, err := sl.Strategy.Next(sl.Servers)
+	if err != nil {
+		log.Errorf(err.Error())
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Infof("Forwarding request to server '%s'", next.URL.Host)
 	// forwarding the request to the proxy
-	l.ServerList.Servers[next].Proxy.ServeHTTP(res, req)
+	next.Forward(res, req)
 }
 
 func main() {
@@ -80,7 +108,7 @@ func main() {
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: lb,
 	}
-
+	log.Infof("starting GoBalncer server on port %d", *port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("error starting server: %v", err)
 	}
