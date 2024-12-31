@@ -14,7 +14,10 @@ type DemoServer struct{}
 
 func (ds *DemoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("All good from server %d", *port)))
+	_, err := w.Write([]byte(fmt.Sprintf("All good from server %d", *port)))
+	if err != nil {
+		log.Errorf("Failed to write response: %v", err)
+	}
 }
 
 func main() {

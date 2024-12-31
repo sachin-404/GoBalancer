@@ -18,7 +18,7 @@ import (
 
 var (
 	port       = flag.Int("port", 8000, "port to run the load balancer on")
-	configFile = flag.String("config", "example/config.yml", "config file for the load balancer")
+	configFile = flag.String("config", "", "config file for the load balancer")
 )
 
 type LoadBalancer struct {
@@ -72,13 +72,13 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	log.Infof("Recieved new request %s", req.Host)
 	sl, err := l.findServiceList(req.URL.Path)
 	if err != nil {
-		log.Errorf(err.Error())
+		log.Error(err.Error())
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	next, err := sl.Strategy.Next(sl.Servers)
 	if err != nil {
-		log.Errorf(err.Error())
+		log.Error(err.Error())
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -90,7 +90,12 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 func main() {
 	flag.Parse()
 	file, err := os.Open(*configFile)
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalf("error closing file: %v", err)
+		}
+	}(file)
 	if err != nil {
 		log.Fatalf("error opening config file: %v", err)
 	}
