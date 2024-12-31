@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/sachin-404/gobalancer/pkg/config"
+	"github.com/sachin-404/gobalancer/pkg/domain"
+	"github.com/sachin-404/gobalancer/pkg/strategy"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -29,14 +31,14 @@ type LoadBalancer struct {
 func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 	serverMap := make(map[string]*config.ServerList)
 	for _, service := range cfg.Services {
-		servers := make([]*config.Server, 0)
+		servers := make([]*domain.Server, 0)
 		for _, replica := range service.Replicas {
 			u, err := url.Parse(replica)
 			if err != nil {
 				log.Fatalf("error parsing url: %v", err)
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
-			servers = append(servers, &config.Server{
+			servers = append(servers, &domain.Server{
 				URL:   u,
 				Proxy: proxy,
 			})
@@ -44,7 +46,8 @@ func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 		serverMap[service.Matcher] = &config.ServerList{
 			Servers: servers,
 			//Current: uint32(0),
-			Name: service.Name,
+			Name:     service.Name,
+			Strategy: strategy.LoadStrategy(service.Strategy),
 		}
 	}
 	return &LoadBalancer{
@@ -73,10 +76,15 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	next := sl.Next()
-	log.Infof("Forwarding request to server number %d", next)
+	next, err := sl.Strategy.Next(sl.Servers)
+	if err != nil {
+		log.Errorf(err.Error())
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Infof("Forwarding request to server '%s'", next.URL.Host)
 	// forwarding the request to the proxy
-	sl.Servers[next].Proxy.ServeHTTP(res, req)
+	next.Forward(res, req)
 }
 
 func main() {
