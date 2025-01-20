@@ -18,7 +18,7 @@ import (
 
 var (
 	port       = flag.Int("port", 8000, "port to run the load balancer on")
-	configFile = flag.String("config", "", "config file for the load balancer")
+	configFile = flag.String("config", "example/weighted.config.yml", "config file for the load balancer")
 )
 
 type LoadBalancer struct {
@@ -33,21 +33,22 @@ func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 	for _, service := range cfg.Services {
 		servers := make([]*domain.Server, 0)
 		for _, replica := range service.Replicas {
-			u, err := url.Parse(replica)
+			u, err := url.Parse(replica.Url)
 			if err != nil {
 				log.Fatalf("error parsing url: %v", err)
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
 			servers = append(servers, &domain.Server{
-				URL:   u,
-				Proxy: proxy,
+				URL:      u,
+				Proxy:    proxy,
+				Metadata: replica.Metadata,
 			})
 		}
 		serverMap[service.Matcher] = &config.ServerList{
 			Servers: servers,
 			//Current: uint32(0),
 			Name:     service.Name,
-			Strategy: strategy.LoadStrategy(service.Strategy),
+			Strategy: strategy.LoadStrategy(cfg.Strategy),
 		}
 	}
 	return &LoadBalancer{
@@ -58,10 +59,10 @@ func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 
 // findServiceList looks for the first server list that matches the path (i.e. matcher)
 func (l *LoadBalancer) findServiceList(reqPath string) (*config.ServerList, error) {
-	log.Infof("Trying to find the matcher for the request %s", reqPath)
+	//log.Infof("Trying to find the matcher for the request %s", reqPath)
 	for matcher, s := range l.ServerList {
 		if strings.HasPrefix(reqPath, matcher) {
-			log.Infof("Found service '%s' matching the request", s.Name)
+			//log.Infof("Found service '%s' matching the request", s.Name)
 			return s, nil
 		}
 	}
@@ -113,7 +114,7 @@ func main() {
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: lb,
 	}
-	log.Infof("starting GoBalncer server on port %d", *port)
+	log.Infof("starting GoBalancer server with '%s' strategy on port %d", cfg.Strategy, *port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("error starting server: %v", err)
 	}
