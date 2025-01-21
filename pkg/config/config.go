@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/sachin-404/gobalancer/pkg/domain"
+	"github.com/sachin-404/gobalancer/pkg/health"
 	"github.com/sachin-404/gobalancer/pkg/strategy"
 )
 
@@ -23,4 +24,6 @@ type ServerList struct {
 	// Strategy defines how the server list is load balanced
 	// it should never be nil, default is 'RoundRobin'
 	Strategy strategy.BalancingStrategy
+	// Health checker for the servers
+	HC *health.HealthChecker
 }

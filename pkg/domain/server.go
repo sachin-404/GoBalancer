@@ -5,6 +5,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"sync"
 )
 
 type Replica struct {
@@ -26,10 +27,29 @@ type Server struct {
 	URL      *url.URL
 	Proxy    *httputil.ReverseProxy
 	Metadata map[string]string
+
+	mu    sync.RWMutex
+	Alive bool
 }
 
 func (s *Server) Forward(w http.ResponseWriter, req *http.Request) {
 	s.Proxy.ServeHTTP(w, req)
+}
+
+// SetLiveness will change the current value and return the old value
+func (s *Server) SetLiveness(value bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old := s.Alive
+	s.Alive = value
+	return old
+}
+
+// IsAlive returns the health of the server
+func (s *Server) IsAlive() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Alive
 }
 
 // GetMetaOrDefault return the value associated with the given key in the metadata

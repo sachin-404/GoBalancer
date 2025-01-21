@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/sachin-404/gobalancer/pkg/health"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -44,13 +45,24 @@ func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 				Metadata: replica.Metadata,
 			})
 		}
+		checker, err := health.NewHealthChecker(servers)
+		if err != nil {
+			log.Fatalf("error creating health checker: %v", err)
+		}
 		serverMap[service.Matcher] = &config.ServerList{
 			Servers: servers,
 			//Current: uint32(0),
 			Name:     service.Name,
 			Strategy: strategy.LoadStrategy(cfg.Strategy),
+			HC:       checker,
 		}
 	}
+
+	// start health checkers
+	for _, sl := range serverMap {
+		go sl.HC.Start()
+	}
+
 	return &LoadBalancer{
 		Config:     cfg,
 		ServerList: serverMap,
