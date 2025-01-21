@@ -1,11 +1,10 @@
 package strategy
 
 import (
+	"errors"
+	"github.com/sachin-404/gobalancer/pkg/domain"
 	log "github.com/sirupsen/logrus"
 	"sync"
-	"sync/atomic"
-
-	"github.com/sachin-404/gobalancer/pkg/domain"
 )
 
 const (
@@ -25,7 +24,8 @@ func init() {
 	strategies = make(map[string]func() BalancingStrategy)
 	strategies[RoundRobinStrategy] = func() BalancingStrategy {
 		return &RoundRobin{
-			Current: uint32(0),
+			mu:      sync.Mutex{},
+			Current: 0,
 		}
 	}
 	strategies[WeightedRoundRobinStrategy] = func() BalancingStrategy {
@@ -34,22 +34,33 @@ func init() {
 }
 
 type RoundRobin struct {
+	mu sync.Mutex
 	// Current is the index of the server to be used
 	// the next server would be (current + 1) % len(Servers)
-	Current uint32
+	Current int
 }
 
 func (r *RoundRobin) Next(servers []*domain.Server) (*domain.Server, error) {
-	// normal increament (sl.current + 1) is not thread safe, can lead to race conditions
-	// atomic is crucial because multiple goroutines might be requesting the next server simultaneously
-	nxt := atomic.AddUint32(&r.Current, uint32(1))
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	//TODO: Do not using modulo (nxt % len(sl.Servers)) because it is expensive
-	lenS := uint32(len(servers))
-	// if nxt >= lenS {
-	// 	nxt -= lenS
-	// }
-	return servers[nxt%lenS], nil
+	seen := 0
+	var picked *domain.Server
+	for seen < len(servers) {
+		picked = servers[r.Current]
+		r.Current = (r.Current + 1) % len(servers)
+		if picked.IsAlive() {
+			break
+		}
+		seen++
+	}
+
+	if picked == nil || seen == len(servers) {
+		log.Errorf("no servers available")
+		return nil, errors.New("no servers available")
+	}
+
+	return picked, nil
 }
 
 // WeightedRoundRobin is similar to RoundRobin but the diff is it takes compute power
@@ -70,21 +81,41 @@ type WeightedRoundRobin struct {
 func (r *WeightedRoundRobin) Next(servers []*domain.Server) (*domain.Server, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if r.Count == nil {
 		// First time using the strategy
 		r.Count = make([]int, len(servers))
 		r.Current = 0
 	}
-	capacity := servers[r.Current].GetMetaOrDefaultInt("weight", 1)
-	if r.Count[r.Current] <= capacity {
-		r.Count[r.Current]++
-		return servers[r.Current], nil
+
+	seen := 0
+	var picked *domain.Server
+	for seen < len(servers) {
+		picked = servers[r.Current]
+		capacity := picked.GetMetaOrDefaultInt("weight", 1)
+		if !picked.IsAlive() {
+			seen++
+			// Current server is not alive so we reset the servers bucket count
+			// and try next server in the next loop iteration
+			r.Count[r.Current] = 0
+			r.Current = (r.Current + 1) % len(servers)
+			continue
+		}
+		if r.Count[r.Current] <= capacity {
+			r.Count[r.Current]++
+			return picked, nil
+		}
+		// Server is at its capacity, reset the current one and move on to the next one
+		r.Count[r.Current] = 0
+		r.Current = (r.Current + 1) % len(servers)
 	}
 
-	// Server is at its capacity, reset the current one ane move on to the next one
-	r.Count[r.Current] = 0
-	r.Current = (r.Current + 1) % len(servers)
-	return servers[r.Current], nil
+	if picked == nil || seen == len(servers) {
+		log.Errorf("no servers available")
+		return nil, errors.New("no servers available")
+	}
+
+	return picked, nil
 }
 
 // LoadStrategy will try to resolve the strategy name
