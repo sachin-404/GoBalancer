@@ -1,6 +1,6 @@
-strategy: "RoundRobin"
 services:
   - name: "test service"
+    strategy: "RoundRobin"
     matcher: "/"
     replicas:
       - url: http://localhost:8001

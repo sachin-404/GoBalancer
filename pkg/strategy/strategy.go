@@ -22,12 +22,14 @@ var strategies = map[string]func() BalancingStrategy{}
 
 func init() {
 	strategies = make(map[string]func() BalancingStrategy)
+
 	strategies[RoundRobinStrategy] = func() BalancingStrategy {
 		return &RoundRobin{
 			mu:      sync.Mutex{},
 			Current: 0,
 		}
 	}
+
 	strategies[WeightedRoundRobinStrategy] = func() BalancingStrategy {
 		return &WeightedRoundRobin{mu: sync.Mutex{}}
 	}
@@ -101,7 +103,7 @@ func (r *WeightedRoundRobin) Next(servers []*domain.Server) (*domain.Server, err
 			r.Current = (r.Current + 1) % len(servers)
 			continue
 		}
-		if r.Count[r.Current] <= capacity {
+		if r.Count[r.Current] < capacity {
 			r.Count[r.Current]++
 			return picked, nil
 		}

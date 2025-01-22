@@ -19,7 +19,7 @@ import (
 
 var (
 	port       = flag.Int("port", 8000, "port to run the load balancer on")
-	configFile = flag.String("config", "example/weighted.config.yml", "config file for the load balancer")
+	configFile = flag.String("config", "", "config file for the load balancer")
 )
 
 type LoadBalancer struct {
@@ -53,7 +53,7 @@ func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 			Servers: servers,
 			//Current: uint32(0),
 			Name:     service.Name,
-			Strategy: strategy.LoadStrategy(cfg.Strategy),
+			Strategy: strategy.LoadStrategy(service.Strategy),
 			HC:       checker,
 		}
 	}
@@ -89,6 +89,7 @@ func (l *LoadBalancer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	next, err := sl.Strategy.Next(sl.Servers)
 	if err != nil {
 		log.Error(err.Error())
@@ -126,7 +127,7 @@ func main() {
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: lb,
 	}
-	log.Infof("starting GoBalancer server with '%s' strategy on port %d", cfg.Strategy, *port)
+	log.Infof("starting GoBalancer server port %d", *port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("error starting server: %v", err)
 	}

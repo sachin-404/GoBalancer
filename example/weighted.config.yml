@@ -1,6 +1,6 @@
-strategy: "WeightedRoundRobin"
 services:
-  - name: "test service"
+  - name: service1
+    strategy: WeightedRoundRobin
     matcher: "/"
     replicas:
       - url: http://localhost:8001

@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	healthCheckPeriod     = 2 // 2 seconds
+	serverTimeoutDuration = 5 * time.Second
+)
+
 type HealthChecker struct {
 	Servers []*domain.Server
 	// TODO: take period from configuration
@@ -20,7 +25,7 @@ func NewHealthChecker(servers []*domain.Server) (*HealthChecker, error) {
 	}
 	return &HealthChecker{
 		Servers: servers,
-		period:  1,
+		period:  healthCheckPeriod,
 	}, nil
 }
 
@@ -40,7 +45,7 @@ func (hc *HealthChecker) Start() {
 // healthCheck changes the liveness of the server either from live to
 // unavailable or the other way around
 func healthCheck(server *domain.Server) {
-	_, err := net.DialTimeout("tcp", server.URL.Host, time.Second*5)
+	_, err := net.DialTimeout("tcp", server.URL.Host, serverTimeoutDuration)
 	if err != nil {
 		log.Errorf("error connecting to server %s: %v", server.URL.Host, err)
 		old := server.SetLiveness(false)

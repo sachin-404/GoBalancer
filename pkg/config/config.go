@@ -10,10 +10,6 @@ import (
 // from a config source
 type Config struct {
 	Services []domain.Service `yaml:"services"`
-
-	// TODO: remove from here
-	// strategy to be used for load balancing
-	Strategy string `yaml:"strategy"`
 }
 
 type ServerList struct {
