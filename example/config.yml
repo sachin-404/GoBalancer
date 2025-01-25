@@ -1,7 +1,17 @@
 services:
-  - name: "test service"
-    strategy: "RoundRobin"
-    matcher: "/"
+  - name: "Web UI"
+    strategy: RoundRobin
+    matcher: /ui
+    replicas:
+      - url: http://localhost:3001
+      - url: http://localhost:3002
+  - name: "Stateless API"
+    matcher: /api/v1
+    strategy: WeightedRoundRobin
     replicas:
       - url: http://localhost:8001
+        metadata:
+          weight: 3
       - url: http://localhost:8002
+        metadata:
+          weight: 1

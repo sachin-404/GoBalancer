@@ -1,0 +1,7 @@
+services:
+  - name: "test service"
+    strategy: RoundRobin
+    matcher: "/"
+    replicas:
+      - url: http://localhost:8001
+      - url: http://localhost:8002
