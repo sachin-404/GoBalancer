@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net/http"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var UIPort = flag.Int("port", 3000, "port for UI service")
