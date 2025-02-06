@@ -40,12 +40,12 @@ Use demo servers to test the load balancer. The demo servers are present in the 
 
 ```bash
 # Start two api servers
-go run cmd/demo/api_server.go --port=8001
-go run cmd/demo/api_server.go --port=8002
+go run cmd/demo/api/api_server.go --port=8001
+go run cmd/demo/api/api_server.go --port=8002
 
 # Start two ui servers
-go run cmd/demo/ui_server.go --port=3001
-go run cmd/demo/ui_server.go --port=3002
+go run cmd/demo/ui/ui_server.go --port=3001
+go run cmd/demo/ui/ui_server.go --port=3002
 ```
 
 Send requests to the load balancer using `curl http://localhost:8000/ui` or `curl http://localhost:8000/api/v1`. The load balancer will route the requests to the appropriate server based on the strategy.
